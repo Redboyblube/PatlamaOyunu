@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eğlenceli Patlama Oyunu</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Roboto', sans-serif;
+            background-color: #3c3c3c;
+        }
+        canvas {
+            display: block;
+            border: 10px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
+        }
+        .puan-panesi, .fps-panesi, .geri-sayim-panesi {
+            position: absolute;
+            top: 10px;
+            font-size: 24px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px 20px;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+        }
+        .puan-panesi { left: 10px; color: white; }
+        .fps-panesi { right: 10px; color: #00ff00; border-color: rgba(0, 255, 0, 0.5); }
+        .geri-sayim-panesi {
+            top: 50px;
+            left: 10px;
+            color: #ff5555;
+            border-color: rgba(255, 85, 85, 0.5);
+        }
+        .mesaj {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 36px;
+            color: white;
+            font-weight: bold;
+            display: none;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.9);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="explosionCanvas"></canvas>
+    <div class="puan-panesi">Puan: <span class="score">0</span></div>
+    <div class="fps-panesi"><span class="fps">0</span></div>
+    <div class="geri-sayim-panesi">Geri Sayım: <span class="countdown">30</span>s</div>
+    <div class="mesaj" id="message"></div>
+
+    <script>
+        const canvas = document.getElementById('explosionCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.querySelector('.score');
+        const fpsElement = document.querySelector('.fps');
+        const countdownElement = document.querySelector('.countdown');
+        const messageElement = document.getElementById('message');
+        let particles = [];
+        let score = 0;
+        let explosionCount = 0;
+        let difficulty = 'easy';
+        let lastTime = 0;
+        let frameTimes = [];
+        let countdown = 30; // Başlangıç geri sayım süresi
+        let targetClicks = 300; // Başlangıç hedef tıklama sayısı
+        let clickCount = 0;
+        let countdownInterval;
+
+        const colors = ['#6a4c8c', '#5d3f6d', '#4a2c4d', '#2f4f4f', '#3a3a3a', '#5a3d3d', '#403b3d', '#2f3e46', '#4a4e69'];
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function showMessage(message) {
+            messageElement.textContent = message;
+            messageElement.style.display = 'block';
+            setTimeout(() => messageElement.style.display = 'none', 2000);
+        }
+
+        showMessage('Oyun Başladı!');
+        startCountdown();
+
+        canvas.addEventListener('click', (event) => {
+            createExplosion(event.clientX, event.clientY);
+            incrementScore(1);
+            changeBackgroundColor();
+            clickCount++;
+            checkCountdownGoal();
+        });
+
+        function startCountdown() {
+            countdownInterval = setInterval(() => {
+                countdown--;
+                countdownElement.textContent = countdown;
+                if (countdown <= 0) {
+                    clearInterval(countdownInterval);
+                    endGame(false);
+                }
+            }, 1000);
+        }
+
+        function checkCountdownGoal() {
+            if (clickCount >= targetClicks) {
+                countdown -= 2;
+                targetClicks += 50;
+                clickCount = 0;
+                showMessage('Hedef başarıldı! Zorluk arttı!');
+            }
+        }
+
+        function createExplosion(x, y) {
+            increaseDifficulty();
+            const numParticles = 100 + explosionCount * (difficulty === "hard" ? 20 : 10);
+            const explosionPower = 10 + explosionCount + (difficulty === "hard" ? 5 : 0);
+            for (let i = 0; i < numParticles; i++) {
+                const angle = Math.random() * 2 * Math.PI;
+                const speed = Math.random() * explosionPower;
+                particles.push({
+                    x, y,
+                    speedX: Math.cos(angle) * speed,
+                    speedY: Math.sin(angle) * speed,
+                    size: Math.random() * 5 + 10,
+                    alpha: 1,
+                    color: `hsl(${Math.random() * 60 + 30}, 100%, 50%)`,
+                    shape: ['ring', 'square', 'triangle', 'x', 'star'][Math.floor(Math.random() * 5)],
+                    lifetime: Math.random() * 5 + 1
+                });
+            }
+            explosionCount++;
+        }
+
+        function increaseDifficulty() {
+            if (explosionCount > 30 && difficulty === 'easy') {
+                difficulty = 'medium';
+                showMessage('Zorluk Orta Seviyeye Geçti!');
+            } else if (explosionCount > 60 && difficulty === 'medium') {
+                difficulty = 'hard';
+                showMessage('Zorluk Zor Seviyeye Geçti!');
+            }
+        }
+
+        function update() {
+            const currentTime = performance.now();
+            const deltaTime = currentTime - lastTime;
+            frameTimes.push(deltaTime);
+            if (frameTimes.length > 10) frameTimes.shift();
+            fpsElement.textContent = Math.round(1000 / (frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length));
+            lastTime = currentTime;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles = particles.filter(p => p.alpha > 0.05);
+            particles.forEach(particle => {
+                particle.x += particle.speedX;
+                particle.y += particle.speedY;
+                particle.speedX *= 0.99;
+                particle.speedY *= 0.99;
+                particle.alpha *= 0.995;
+                ctx.globalAlpha = particle.alpha;
+                ctx.strokeStyle = particle.color;
+                ctx.lineWidth = 2;
+
+                ctx.beginPath();
+                if (particle.shape === 'square') {
+                    ctx.rect(particle.x - particle.size / 2, particle.y - particle.size / 2, particle.size, particle.size);
+                } else if (particle.shape === 'triangle') {
+                    ctx.moveTo(particle.x, particle.y - particle.size / 2);
+                    ctx.lineTo(particle.x - particle.size / 2, particle.y + particle.size / 2);
+                    ctx.lineTo(particle.x + particle.size / 2, particle.y + particle.size / 2);
+                } else if (particle.shape === 'x') {
+                    const offset = particle.size / 2;
+                    ctx.moveTo(particle.x - offset, particle.y - offset);
+                    ctx.lineTo(particle.x + offset, particle.y + offset);
+                    ctx.moveTo(particle.x + offset, particle.y - offset);
+                    ctx.lineTo(particle.x - offset, particle.y + offset);
+                } else {
+                    ctx.arc(particle.x, particle.y, particle.size / 2, 0, 2 * Math.PI);
+                }
+                ctx.closePath();
+                ctx.stroke();
+            });
+            scoreElement.textContent = score;
+            requestAnimationFrame(update);
+        }
+
+        function incrementScore(points) {
+            score += points;
+        }
+
+        function endGame(isVictory) {
+            if (isVictory) {
+                showMessage("Tebrikler, oyunu kazandınız!");
+            } else {
+                showMessage("Süre doldu, oyun yeniden başlatılıyor!");
+            }
+            clearInterval(countdownInterval);
+            setTimeout(resetGame, 3000); // 3 saniye sonra yeniden başlat
+        }
+
+        function resetGame() {
+            explosionCount = 0;
+            difficulty = 'easy';
+            countdown = 30;
+            targetClicks = 300;
+            clickCount = 0;
+            score = 0;
+            particles = [];
+            startCountdown();
+            showMessage('Oyun Yeniden Başladı!');
+        }
+
+        function changeBackgroundColor() {
+            document.body.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        update();
+    </script>
+</body>
+</html>
